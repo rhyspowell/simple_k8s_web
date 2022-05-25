@@ -1,0 +1,92 @@
+---
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: test-web
+  labels:
+    name: test-web
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  namespace: test-web
+  labels:
+    app: test-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test-web
+  template:
+    metadata:
+      labels:
+        app: test-web
+    spec:
+      containers:
+        - image: containerreg.azurecr.io/busybox:rhys1
+          name: test-web
+          ports:
+          - containerPort: 8280
+      imagePullSecrets:
+      - name: containerreg
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-web
+spec:
+  selector:
+    app: test-web
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8280
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  labels:
+    app: test-web
+  namespace: test-web
+  name: test-web
+spec:
+  entryPoints:
+    - websecure
+  routes:
+  - kind: Rule
+    match: Host(`rhys-test.localdomain`)
+    services:
+    - kind: Service
+      name: test-web
+      passHostHeader: true
+      port: 80
+      responseForwarding:
+        flushInterval: 1ms
+      scheme: http
+      sticky:
+        cookie:
+          httpOnly: false
+          name: cookie
+          sameSite: none
+          secure: false
+      strategy: RoundRobin
+      weight: 10
+  tls:
+    domains:
+    - main: rhys-test.localdomain
+    secretName: cert_secret
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cert_secret
+  namespace: test-busybox
+data:
+  tls.crt: >-
+    stick base64 encoded cert in here
+  tls.key: >-
+    stick base64 encoded cert key in here
+type: kubernetes.io/tls
+
+
